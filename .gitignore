@@ -1,0 +1,14 @@
+# dependencies and build output (this package ships plain ESM, no build step)
+node_modules/
+*.tgz
+
+# local runs and scratch harness homes
+.harness-home/
+tmp/
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
