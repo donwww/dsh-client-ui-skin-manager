@@ -1,0 +1,54 @@
+{
+  "name": "@dsh-external/dsh-client-ui-skin-manager",
+  "version": "0.4.0",
+  "description": "Skin manager for the dsh web GUI: a Settings page that lists installed skins, selects the active one, and switches between the stock UI and a skin",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "skin",
+    "theme",
+    "web-gui",
+    "cordis-plugin"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "tools",
+    "install.mjs",
+    "README.md",
+    "AGENT-INSTALL.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "test": "node test/compose.test.mjs && node test/routes.test.mjs && node test/client.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/donwww/dsh-client-ui-skin-manager.git"
+  },
+  "homepage": "https://github.com/donwww/dsh-client-ui-skin-manager#readme",
+  "bugs": {
+    "url": "https://github.com/donwww/dsh-client-ui-skin-manager/issues"
+  }
+}
