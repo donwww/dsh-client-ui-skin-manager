@@ -21,7 +21,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { MANAGED_BEGIN, MANAGED_END, discoverSkins, parseBlockInserts, readBlockText, readSettings, renderManagedBlock, resolveActiveId, spliceBlock } from "./lib/index.js";
+import { MANAGED_BEGIN, MANAGED_END, discoverSkins, ensurePatchArray, parseBlockInserts, readBlockText, readSettings, renderManagedBlock, resolveActiveId, spliceBlock } from "./lib/index.js";
 
 const dryRun = process.argv.includes("--dry-run");
 const filesOnly = process.argv.includes("--files-only");
@@ -45,14 +45,6 @@ const HOME_HEADER = [
 
 const MANAGER_ROW = ["- insert:", `    - id: ${SELF_ID}`, `      name: '${SELF_PACKAGE}'`, ""].join("\n");
 
-const PROFILE_TEMPLATE = [
-	"# Your patch layer for this dsh profile, applied after every bundle layer:",
-	"# a top-level YAML array of loader patch entries (id-targeted config",
-	"# overrides, disables, and insert lists; `!!js` expressions allowed).",
-	"[]",
-	""
-].join("\n");
-
 if (!existsSync(profileDir)) {
 	console.error(`profile directory not found: ${profileDir}`);
 	process.exit(1);
@@ -75,15 +67,6 @@ function stripManagerRow(text) {
 		.replace(/\n{3,}/g, "\n\n")
 		.trimEnd()
 		.concat("\n");
-}
-
-/** True when a patch layer holds no entries at all (comments only, or an empty array). */
-function hasNoEntries(text) {
-	return text
-		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0 && !line.startsWith("#"))
-		.every((line) => line === "[]");
 }
 
 console.log(`profile : ${profileDir}`);
@@ -135,7 +118,8 @@ const homeWithRow = homeNext.includes(`- id: ${SELF_ID}`) ? homeNext : `${HOME_H
 
 // 4. clean the PROFILE layer: drop our old block and manager row
 const strippedProfile = stripManagerRow(stripBlock(profileText));
-const profileNext = hasNoEntries(strippedProfile) ? PROFILE_TEMPLATE : strippedProfile;
+// a comments-only patch layer is not a YAML array: the harness would refuse to boot
+const profileNext = ensurePatchArray(strippedProfile);
 
 console.log(`skins   : ${skins.map((skin) => `${skin.id} (${skin.id === activeId ? "active" : "off"}${skin.id === activeId ? "" : ""})`).join(", ") || "none"}`);
 console.log(`wiring  : ${plan.map((row) => `${row.skinId}:${row.insert ? "insert" : `adopt ${row.id}`}`).join(", ") || "none"}`);
