@@ -151,3 +151,30 @@ because the running process keeps the module it already imported.
 - With no skin installed the page says so and reports mode `vanilla`.
 - The page reloads once per switch: a skin's client half is delivered with the
   page's boot payload, so it cannot be added or dropped in an already-loaded tab.
+
+## Troubleshooting
+
+### `dsh` refuses to start: `overlay …/cordis.patch.yml must be a top-level YAML array of loader patch entries`
+
+That patch layer holds only comments, which YAML parses as `null` rather than an
+empty array. **Versions before 0.4.1 could leave the profile layer in that state**
+while migrating the manager's own wiring into the home layer, and the next start
+then failed before any plugin could load.
+
+Repair it without starting `dsh` (this is the whole point of the tool — a stuck
+installation cannot boot the harness):
+
+```sh
+node "<...>/dsh-client-ui-skin-manager/tools/repair-patch-layer.mjs" --all
+```
+
+`--dry-run` reports what it would change first. From 0.4.1 on, every writer in this
+package runs its output through the same guarantee, so a comments-only layer can no
+longer be produced (the regression is covered by `test/compose.test.mjs`, which
+checks the written file with the harness's own patch loader).
+
+### A skin row says `未接入` and switching does nothing
+
+The composed tree has not mounted that skin's entry yet. The choice is already
+persisted in the managed block; restart `dsh` once and the row becomes usable. (The
+manager deliberately does not create the entry itself — see "No double mounts".)
