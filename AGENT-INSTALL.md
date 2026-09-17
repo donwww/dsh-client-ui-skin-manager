@@ -78,6 +78,11 @@ node "<...>/tools/patch-skin-dispose.mjs" "<皮肤包目录>"
 - **`Invoke-WebRequest` / `curl` 可能因 TLS 失败**，`raw.githubusercontent.com` 可能超时：所以 `install-skin.mjs` 走 `codeload` 压缩包与 GitHub API（必要时用 blob API 兜底），不要自己拼 raw 链接。
 - **不要动 `<DSH_HOME>/profiles/node_modules`**：那是 harness 自己维护的符号链接镜像。
 - 皮肤是**客户端插件**：切换它必然会刷新页面一次才能加载/卸载它的 `client.js`，这是正常的。
+- **如果 `dsh` 启动报 `overlay .../cordis.patch.yml must be a top-level YAML array of loader patch entries`**：说明那个 patch 层只剩注释（YAML 里等于 `null`，不是数组）。修（**不需要 dsh 能启动**）：
+  ```sh
+  node "<...>/dsh-client-ui-skin-manager/tools/repair-patch-layer.mjs" --all
+  ```
+  以后自己写 patch 层时注意：文件必须是**顶层数组**（空也要写 `[]`，只有注释是无效的）。
 
 ## 卸载
 
