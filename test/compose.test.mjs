@@ -45,7 +45,7 @@ function resolveAppBoot() {
 
 const { composeEntries, loadOverlayPatches } = await import(resolveAppBoot());
 
-const { collectForeignWiring, declaredId, discoverSkins, parseBlockInserts, planWiring, readBlockText, renderManagedBlock, resolveActiveId, spliceBlock, writeManagedBlock, homePatchPath, patchPath } = await import("../lib/index.js");
+const { collectForeignWiring, declaredId, discoverSkins, ensurePatchArray, migrateLayers, parseBlockInserts, planWiring, readBlockText, renderManagedBlock, resolveActiveId, spliceBlock, writeManagedBlock, homePatchPath, patchPath, PROFILE_TEMPLATE } = await import("../lib/index.js");
 
 let failures = 0;
 function check(label, fn) {
@@ -60,6 +60,13 @@ function check(label, fn) {
 
 const PROFILE = patchPath();
 const HOME_PATCH = homePatchPath();
+
+/** `loadOverlayPatches` takes a file path: materialize one-off layer text as a file. */
+function writeTemp(text) {
+	const path = join(HOME, `overlay-${Math.random().toString(36).slice(2)}.yml`);
+	writeFileSync(path, text, "utf8");
+	return path;
+}
 
 /** Create the fixture profile with three skin packages (scoped, plain, BOM'd). */
 function fakeProfile() {
@@ -235,6 +242,61 @@ check("switching back to a foreign-wired skin enables only it", () => {
 	const rows = compose().filter((candidate) => typeof candidate.id === "string" && candidate.id.startsWith("ui-skin-"));
 	const enabled = rows.filter((candidate) => candidate.disabled !== true).map((candidate) => candidate.id);
 	assert.deepEqual(enabled, ["ui-skin-sample"], JSON.stringify(rows.map((row) => ({ id: row.id, disabled: row.disabled }))));
+});
+
+console.log("patch layer integrity (0.4.0 regression)");
+// A comments-only patch layer is NOT a YAML array: YAML parses it as null and the
+// harness refuses to boot with "must be a top-level YAML array of loader patch
+// entries". The 0.4.0 layer migration produced exactly that file. These checks use
+// the harness's own loader so the guarantee is verified, not assumed.
+check("ensurePatchArray: comments only becomes a loadable array", () => {
+	const repaired = ensurePatchArray("# just a comment\n# and another\n");
+	assert.equal(repaired, PROFILE_TEMPLATE);
+	assert.doesNotThrow(() => loadOverlayPatches("test", writeTemp(repaired)));
+});
+check("ensurePatchArray: a lone [] is left byte-identical", () => {
+	const text = "# comment\n[]\n";
+	assert.equal(ensurePatchArray(text), text);
+});
+check("ensurePatchArray: [] mixed with entries drops the [] line", () => {
+	const text = "# comment\n[]\n- insert:\n    - id: ui-skin-sample\n      name: '@dsh-external/dsh-client-ui-skin-sample'\n";
+	const fixed = ensurePatchArray(text);
+	assert.ok(!fixed.includes("[]"), fixed);
+	assert.doesNotThrow(() => loadOverlayPatches("test", writeTemp(fixed)));
+});
+check("ensurePatchArray: entries without [] are left untouched", () => {
+	const text = "# comment\n- id: ui-skin-sample\n  disabled: false\n";
+	assert.equal(ensurePatchArray(text), text);
+});
+check("migrateLayers leaves the profile layer loadable (not comments-only)", () => {
+	// the exact 0.4.0 layout: header comments + the manager row + the managed block
+	writeProfile(
+		"# Your patch layer for this dsh profile, applied after every bundle layer:\n" +
+			"# a top-level YAML array of loader patch entries.\n" +
+			"#\n" +
+			"# The markers below are maintained by the skin manager.\n" +
+			"- insert:\n" +
+			"    - id: ui-skin-manager\n" +
+			"      name: '@dsh-external/dsh-client-ui-skin-manager'\n" +
+			renderManagedBlock(planWiring({ skins: [sample], state: { mode: "skin", skin: "sample" }, previousBlock: "", foreign: noForeign() })) +
+			"\n"
+	);
+	writeFileSync(HOME_PATCH, "");
+	assert.doesNotThrow(() => loadOverlayPatches("test", PROFILE), "fixture itself must still be loadable");
+	migrateLayers([sample, second, third], { mode: "skin", skin: "sample" });
+	const profile = readFileSync(PROFILE, "utf8");
+	assert.ok(!profile.includes("dsh-skin-manager:begin"), "the manager's block must leave the profile layer");
+	assert.ok(!profile.includes("ui-skin-manager"), "the manager's row must leave the profile layer");
+	assert.doesNotThrow(() => loadOverlayPatches("test", PROFILE), `profile layer after migration is not loadable:\n${profile}`);
+	const home = readFileSync(HOME_PATCH, "utf8");
+	assert.ok(home.includes("- id: ui-skin-manager"), "the home layer takes over the manager row");
+	assert.ok(home.includes("dsh-skin-manager:begin"), "the home layer takes over the managed block");
+});
+check("migrateLayers repairs an already broken (comments-only) profile layer", () => {
+	writeProfile("# Your patch layer for this dsh profile.\n#\n# The markers below are maintained by the skin manager.\n");
+	assert.throws(() => loadOverlayPatches("test", PROFILE), "the broken state must be exactly what fails at boot");
+	migrateLayers([sample], { mode: "skin", skin: "sample" });
+	assert.doesNotThrow(() => loadOverlayPatches("test", PROFILE), `repair failed:\n${readFileSync(PROFILE, "utf8")}`);
 });
 
 rmSync(HOME, { recursive: true, force: true });
